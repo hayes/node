@@ -110,6 +110,7 @@ class AsyncWrap : public BaseObject {
 
   static bool EmitBefore(Environment* env, double id);
   static bool EmitAfter(Environment* env, double id);
+  static bool EmitResolve(Environment* env, double promise_id, double async_id);
 
   inline ProviderType provider_type() const;
 

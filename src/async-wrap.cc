@@ -279,6 +279,29 @@ bool AsyncWrap::EmitAfter(Environment* env, double async_id) {
   return true;
 }
 
+bool AsyncWrap::EmitResolve(Environment* env, double async_id, double trigger_id) {
+  AsyncHooks* async_hooks = env->async_hooks();
+
+  if (async_hooks->fields()[AsyncHooks::kResolve] > 0) {
+    Local<Function> fn = env->async_hooks_resolve_function();
+
+    Local<Value> argv[] = {
+      Number::New(env->isolate(), async_id),
+      Number::New(env->isolate(), trigger_id),
+    };
+    TryCatch try_catch(env->isolate());
+    MaybeLocal<Value> ar = fn->Call(
+        env->context(), Undefined(env->isolate()), arraysize(argv), argv);
+    if (ar.IsEmpty()) {
+      ClearFatalExceptionHandlers(env);
+      FatalException(env->isolate(), try_catch);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 class PromiseWrap : public AsyncWrap {
  public:
   PromiseWrap(Environment* env, Local<Object> object, bool silent)
@@ -315,6 +338,7 @@ static void PromiseHook(PromiseHookType type, Local<Promise> promise,
     wrap->MakeWeak(wrap);
   } else if (type == PromiseHookType::kResolve) {
     // TODO(matthewloring): need to expose this through the async hooks api.
+    AsyncWrap::EmitResolve(env, wrap->get_id(), env->current_async_id());
   }
   CHECK_NE(wrap, nullptr);
   if (type == PromiseHookType::kBefore) {
@@ -349,6 +373,7 @@ static void SetupHooks(const FunctionCallbackInfo<Value>& args) {
   SET_HOOK_FN(before);
   SET_HOOK_FN(after);
   SET_HOOK_FN(destroy);
+  SET_HOOK_FN(resolve);
   env->AddPromiseHook(PromiseHook, nullptr);
 #undef SET_HOOK_FN
 }
@@ -460,6 +485,7 @@ void AsyncWrap::Initialize(Local<Object> target,
   SET_HOOKS_CONSTANT(kBefore);
   SET_HOOKS_CONSTANT(kAfter);
   SET_HOOKS_CONSTANT(kDestroy);
+  SET_HOOKS_CONSTANT(kResolve);
   SET_HOOKS_CONSTANT(kCurrentAsyncId);
   SET_HOOKS_CONSTANT(kCurrentTriggerId);
   SET_HOOKS_CONSTANT(kAsyncUidCntr);
@@ -492,6 +518,7 @@ void AsyncWrap::Initialize(Local<Object> target,
   env->set_async_hooks_before_function(Local<Function>());
   env->set_async_hooks_after_function(Local<Function>());
   env->set_async_hooks_destroy_function(Local<Function>());
+  env->set_async_hooks_resolve_function(Local<Function>());
 }
 
 
